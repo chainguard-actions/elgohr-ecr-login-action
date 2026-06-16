@@ -9,6 +9,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
 | v2 | [`v2`](https://github.com/chainguard-actions/elgohr-ecr-login-action/tree/v2) | [`fe5eda1`](https://github.com/elgohr/ecr-login-action/commit/fe5eda15f68e44bbfef2f14cbb0c167675c50070) |
+| v3 | [`v3`](https://github.com/chainguard-actions/elgohr-ecr-login-action/tree/v3) | [`370db6f`](https://github.com/elgohr/ecr-login-action/commit/370db6fb22395fcaaaaff429b1c289e82d41b868) |
 
 ## Privacy
 
