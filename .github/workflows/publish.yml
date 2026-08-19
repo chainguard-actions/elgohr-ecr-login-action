@@ -1,0 +1,17 @@
+name: Publish
+on:
+  push:
+    branches:
+      - master
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@61b9e3751b92087fd0b06925ba6dd6314e06f089 # master
+    - name: Publish to Registry
+      uses: elgohr/Publish-Docker-Github-Action@8217e91c0369a5342a4ef2d612de87492410a666 # master
+      with:
+        name: lgohr/ecr-login-action
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
