@@ -1,0 +1,53 @@
+name: Test docker_name strips https prefix
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Mock the AWS CLI with a different account/region to verify docker_name formatting
+      - name: Install mock AWS CLI
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/aws" << 'EOF'
+          #!/usr/bin/env bash
+          echo '{"authorizationData":[{"authorizationToken":"QVdTOkFVVEhfUEFTU1dPUkQK","expiresAt":1569961966.371,"proxyEndpoint":"https://987654321.dkr.ecr.eu-west-1.amazonaws.com"}]}'
+          EOF
+          chmod +x "$HOME/.local/bin/aws"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - id: ecr-login
+        uses: .
+        with:
+          access_key: AKIAIOSFODNN7EXAMPLE
+          secret_access_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+          region: eu-west-1
+
+      - name: Assert registry contains https prefix
+        env:
+          ACTUAL: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          echo "actual registry: $ACTUAL"
+          if [ "$ACTUAL" != "https://987654321.dkr.ecr.eu-west-1.amazonaws.com" ]; then
+            echo "FAIL: expected registry with https prefix, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert docker_name has no https prefix
+        env:
+          ACTUAL: ${{ steps.ecr-login.outputs.docker_name }}
+        run: |
+          echo "actual docker_name: $ACTUAL"
+          if [ "$ACTUAL" != "987654321.dkr.ecr.eu-west-1.amazonaws.com" ]; then
+            echo "FAIL: expected docker_name without https prefix, got '$ACTUAL'"
+            exit 1
+          fi
+          # Verify no https:// prefix
+          if echo "$ACTUAL" | grep -q "https://"; then
+            echo "FAIL: docker_name should not contain 'https://'"
+            exit 1
+          fi
+          echo "PASS"

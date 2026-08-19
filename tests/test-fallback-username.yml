@@ -1,0 +1,63 @@
+name: Test fallback username when token has empty username
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mock aws CLI with empty username token
+        run: |
+          mkdir -p /tmp/mock-bin
+          # Token ":SOME_PASSWORD" base64-encoded = OlNPTUVfUEFTU1dPUkQ=
+          # This simulates a token where the username part is empty
+          EMPTY_USER_TOKEN=$(printf ':SOME_PASSWORD' | base64 -w0)
+          echo "Empty user token: $EMPTY_USER_TOKEN"
+          cat > /tmp/mock-bin/aws << EOF
+          #!/bin/sh
+          echo '{"authorizationData":[{"authorizationToken":"${EMPTY_USER_TOKEN}","expiresAt":1569961966.371,"proxyEndpoint":"https://999999999.dkr.ecr.eu-west-1.amazonaws.com"}]}'
+          exit 0
+          EOF
+          chmod +x /tmp/mock-bin/aws
+          echo "/tmp/mock-bin" >> "$GITHUB_PATH"
+
+      - id: action
+        uses: .
+        with:
+          access_key: fake-access-key
+          secret_access_key: fake-secret-key
+          region: eu-west-1
+
+      - name: Assert username falls back to AWS
+        env:
+          ACTUAL: ${{ steps.action.outputs.username }}
+        run: |
+          echo "actual username: $ACTUAL"
+          if [ "$ACTUAL" != "AWS" ]; then
+            echo "FAIL: expected fallback username 'AWS', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: username correctly fell back to 'AWS'"
+
+      - name: Assert registry output for eu-west-1
+        env:
+          ACTUAL: ${{ steps.action.outputs.registry }}
+        run: |
+          echo "actual registry: $ACTUAL"
+          if [ "$ACTUAL" != "https://999999999.dkr.ecr.eu-west-1.amazonaws.com" ]; then
+            echo "FAIL: expected registry 'https://999999999.dkr.ecr.eu-west-1.amazonaws.com', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: registry is correct"
+
+      - name: Assert docker_name strips https prefix
+        env:
+          ACTUAL: ${{ steps.action.outputs.docker_name }}
+        run: |
+          echo "actual docker_name: $ACTUAL"
+          if [ "$ACTUAL" != "999999999.dkr.ecr.eu-west-1.amazonaws.com" ]; then
+            echo "FAIL: expected docker_name '999999999.dkr.ecr.eu-west-1.amazonaws.com', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: docker_name correctly strips https:// prefix"

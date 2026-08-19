@@ -1,0 +1,58 @@
+name: Release
+on: 
+  push:
+    branches: [ main ]
+    tags-ignore:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+    - name: Build the Docker image
+      run: docker build .
+
+  integration-test:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+    - uses: elgohr/ecr-login-action@cfc13779e02b4569910002aacd9e24ea086264dc # main
+      id: ecr
+      with:
+        access_key: ${{ secrets.ACCESS_KEY }}
+        secret_access_key: ${{ secrets.SECRET_ACCESS_KEY }}
+        region: ${{ secrets.REGION }}
+    - name: Login
+      env:
+        DOCKER_USERNAME: ${{ steps.ecr.outputs.username }}
+        DOCKER_PASSWORD: ${{ steps.ecr.outputs.password }}
+        DOCKER_REGISTRY: ${{ steps.ecr.outputs.registry }}
+      run: echo "${DOCKER_PASSWORD}" | docker login --username "${DOCKER_USERNAME}" --password-stdin "${DOCKER_REGISTRY}"
+    - run: docker logout
+
+  release:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
+    needs:
+      - test
+      - integration-test
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
+        with:
+          token: ${{ secrets.PUBLISH_TOKEN }} # for pushing to protected branch
+      - name: Publish new version
+        run: |
+          git config --global user.email "no_reply@gohr.digital"
+          git config --global user.name "Release Bot"
+          git tag -fa v2 -m "Update v2 tag"
+          git push origin v2 --force
