@@ -16,8 +16,13 @@ if [ -z "$USERNAME" ]; then
   USERNAME="AWS"
 fi
 
-echo "username=${USERNAME}" >> "$GITHUB_OUTPUT"
-echo "::add-mask::${PASSWORD}"
-echo "password=${PASSWORD}" >> "$GITHUB_OUTPUT"
-echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
-echo "docker_name=${DOCKER_NAME}" >> "$GITHUB_OUTPUT"
+safe_username=$(printf '%s' "$USERNAME" | tr -d '\n\r')
+safe_password=$(printf '%s' "$PASSWORD" | tr -d '\n\r')
+safe_registry=$(printf '%s' "$REGISTRY" | tr -d '\n\r')
+safe_docker_name=$(printf '%s' "$DOCKER_NAME" | tr -d '\n\r')
+
+echo "username=${safe_username}" >> "$GITHUB_OUTPUT"
+echo "::add-mask::${safe_password}"
+echo "password=${safe_password}" >> "$GITHUB_OUTPUT"
+echo "registry=${safe_registry}" >> "$GITHUB_OUTPUT"
+echo "docker_name=${safe_docker_name}" >> "$GITHUB_OUTPUT"

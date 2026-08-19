@@ -1,0 +1,39 @@
+name: Test action fails when AWS CLI returns error
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install failing mock AWS CLI
+        run: |
+          # This mock simulates an AWS authentication failure
+          mkdir -p "$HOME/mock-bin"
+          cat > "$HOME/mock-bin/aws" << 'EOF'
+          #!/usr/bin/env bash
+          echo "An error occurred (InvalidClientTokenId) when calling the GetAuthorizationToken operation: The security token included in the request is invalid." >&2
+          exit 1
+          EOF
+          chmod +x "$HOME/mock-bin/aws"
+          echo "$HOME/mock-bin" >> "$GITHUB_PATH"
+
+      - id: ecr-login
+        uses: .
+        with:
+          access_key: INVALIDKEY
+          secret_access_key: INVALIDSECRET
+          region: us-east-1
+        continue-on-error: true
+
+      - name: Assert action failed
+        env:
+          OUTCOME: ${{ steps.ecr-login.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail with invalid credentials, got outcome '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action correctly failed with invalid credentials"

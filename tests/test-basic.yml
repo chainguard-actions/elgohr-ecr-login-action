@@ -1,4 +1,4 @@
-name: Test basic ECR login inputs
+name: Test basic ECR login
 on:
   workflow_dispatch:
 jobs:
@@ -6,20 +6,65 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - id: action
+
+      - name: Install mock AWS CLI
+        run: |
+          mkdir -p /tmp/mock-bin
+          cat > /tmp/mock-bin/aws << 'EOF'
+          #!/bin/sh
+          echo '{"authorizationData":[{"authorizationToken":"QVdTOkFVVEhfUEFTU1dPUkQK","expiresAt":1569961966.371,"proxyEndpoint":"https://123456789012.dkr.ecr.us-east-1.amazonaws.com"}]}'
+          exit 0
+          EOF
+          chmod +x /tmp/mock-bin/aws
+          echo "/tmp/mock-bin" >> $GITHUB_PATH
+
+      - id: ecr-login
         uses: .
-        continue-on-error: true
         with:
           access_key: AKIAIOSFODNN7EXAMPLE
           secret_access_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
           region: us-east-1
-      - name: Assert action was invoked with all required inputs
+
+      - name: Assert username output
+        env:
+          ACTUAL: ${{ steps.ecr-login.outputs.username }}
         run: |
-          echo "Action outcome: ${{ steps.action.outcome }}"
-          # The action requires real AWS credentials to succeed.
-          # We verify it ran (not skipped) and that all required inputs were passed.
-          if [ "${{ steps.action.outcome }}" = "skipped" ]; then
-            echo "FAIL: action was skipped, expected it to run"
+          echo "actual username: $ACTUAL"
+          if [ "$ACTUAL" != "AWS" ]; then
+            echo "FAIL: expected username 'AWS', got '$ACTUAL'"
             exit 1
           fi
-          echo "PASS: action ran with all required inputs (access_key, secret_access_key, region)"
+          echo "PASS: username is AWS"
+
+      - name: Assert password output
+        env:
+          ACTUAL: ${{ steps.ecr-login.outputs.password }}
+        run: |
+          echo "actual password length: ${#ACTUAL}"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: expected non-empty password"
+            exit 1
+          fi
+          echo "PASS: password is non-empty"
+
+      - name: Assert registry output
+        env:
+          ACTUAL: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          echo "actual registry: $ACTUAL"
+          if [ "$ACTUAL" != "https://123456789012.dkr.ecr.us-east-1.amazonaws.com" ]; then
+            echo "FAIL: expected registry 'https://123456789012.dkr.ecr.us-east-1.amazonaws.com', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: registry matches"
+
+      - name: Assert docker_name output
+        env:
+          ACTUAL: ${{ steps.ecr-login.outputs.docker_name }}
+        run: |
+          echo "actual docker_name: $ACTUAL"
+          if [ "$ACTUAL" != "123456789012.dkr.ecr.us-east-1.amazonaws.com" ]; then
+            echo "FAIL: expected docker_name '123456789012.dkr.ecr.us-east-1.amazonaws.com', got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: docker_name matches"
