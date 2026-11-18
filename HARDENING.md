@@ -4,71 +4,89 @@
 
 > This file was generated automatically by the hardening agent.
 
-**Policy SHA:** `d636be7e43ef829af6e853da6b3c7566db9f72fe`
+**Policy SHA:** `374911c4be584df24e6da57af2d990570ef0f859`
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
 **Harden Agent Version:** `2`
 
-Action **elgohr--ecr-login-action/v3** was hardened automatically. 2 finding(s) were identified and resolved across 2 iteration(s).
+Action **elgohr--ecr-login-action/v3** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
-### unpinned-uses (severity: high)
+### prior-fix (severity: high)
 
-Multiple workflow files reference actions by mutable tags or branch names instead of pinned full-length commit SHAs, making the workflows vulnerable to supply-chain attacks if those tags/branches are moved.
+Carried forward from this version's previous harden, which fixed it; fix it again unless the code no longer has the problem. The previous harden changed action.yml without recording a finding for it, and this analysis reported nothing there. Re-apply its security changes unless the code no longer needs them. The previous patch:
+```diff
+diff --git a/action.yml b/action.yml
+index cf2da3e..9134ba6 100644
+--- a/action.yml
++++ b/action.yml
+@@ -27,10 +27,26 @@ outputs:
+   docker_name:
+     description: 'The name of the docker image'
+     value: ${{ steps.ecr-login.outputs.docker_name }}
+-
+ runs:
+   using: 'composite'
+-  steps:      
++  steps:
+     - id: ecr-login
+       run: $GITHUB_ACTION_PATH/entrypoint.sh
+       shell: bash
+@@ -38,4 +54,3 @@ runs:
+         INPUT_ACCESS_KEY: ${{ inputs.access_key }}
+         INPUT_SECRET_ACCESS_KEY: ${{ inputs.secret_access_key }}
+         INPUT_REGION: ${{ inputs.region }}
+-        
 
-- `.github/workflows/assign.yml`: `uses: pozil/auto-assign-issue@v2` (tag)
-- `.github/workflows/release.yml`: `uses: actions/checkout@v4` (tag, appears 3 times)
-- `.github/workflows/release.yml`: `uses: elgohr/ecr-login-action@main` (branch)
+```
 
 Locations:
 
-- `.github/workflows/assign.yml:8`
-- `.github/workflows/release.yml:13`
-- `.github/workflows/release.yml:22`
-- `.github/workflows/release.yml:23`
-- `.github/workflows/release.yml:40`
+- `action.yml`
 
-### missing-permissions (severity: medium)
+### prior-fix (severity: high)
 
-Two workflow files lack complete permissions coverage:
+Carried forward from this version's previous harden, which fixed it; fix it again unless the code no longer has the problem. The previous harden changed entrypoint.sh without recording a finding for it, and this analysis reported nothing there. Re-apply its security changes unless the code no longer needs them. The previous patch:
+```diff
+diff --git a/entrypoint.sh b/entrypoint.sh
+index e8d0e79..5deaccf 100755
+--- a/entrypoint.sh
++++ b/entrypoint.sh
+@@ -16,8 +16,13 @@ if [ -z "$USERNAME" ]; then
+   USERNAME="AWS"
+ fi
+ 
+-echo "username=${USERNAME}" >> "$GITHUB_OUTPUT"
+-echo "::add-mask::${PASSWORD}"
+-echo "password=${PASSWORD}" >> "$GITHUB_OUTPUT"
+-echo "registry=${REGISTRY}" >> "$GITHUB_OUTPUT"
+-echo "docker_name=${DOCKER_NAME}" >> "$GITHUB_OUTPUT"
++safe_username=$(printf '%s' "$USERNAME" | tr -d '\n\r')
++safe_password=$(printf '%s' "$PASSWORD" | tr -d '\n\r')
++safe_registry=$(printf '%s' "$REGISTRY" | tr -d '\n\r')
++safe_docker_name=$(printf '%s' "$DOCKER_NAME" | tr -d '\n\r')
++
++echo "username=${safe_username}" >> "$GITHUB_OUTPUT"
++echo "::add-mask::${safe_password}"
++echo "password=${safe_password}" >> "$GITHUB_OUTPUT"
++echo "registry=${safe_registry}" >> "$GITHUB_OUTPUT"
++echo "docker_name=${safe_docker_name}" >> "$GITHUB_OUTPUT"
 
-1. `.github/workflows/assign.yml`: No top-level `permissions:` key and the only job (`auto-assign`) has no job-level `permissions:` key. The workflow uses `secrets.GITHUB_TOKEN` without restricting its scope.
-
-2. `.github/workflows/release.yml`: No top-level `permissions:` key, and the `release` job has no job-level `permissions:` key (only the `test` and `integration-test` jobs define `permissions: contents: read`). The `release` job pushes tags to the repository and uses `secrets.PUBLISH_TOKEN`, but its token permissions are unrestricted.
+```
 
 Locations:
 
-- `.github/workflows/assign.yml:1`
-- `.github/workflows/release.yml:34`
+- `entrypoint.sh`
 
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** unpinned-uses, missing-permissions
+**Fixes applied:** prior-fix
 
 **Notes:**
 
-Fixed both workflow files:
-
-1. assign.yml:
-   - Pinned pozil/auto-assign-issue@v2 to full SHA @7bf9d82c77d45976224660b873fc83e60576c5aa
-   - Added top-level `permissions: {}` to deny all by default
-   - Added job-level `permissions: issues: write` (minimum needed for issue assignment)
-
-2. release.yml:
-   - Pinned actions/checkout@v4 (3 occurrences) to full SHA @34e114876b0b11c390a56381ad16ebd13914f8d5
-   - Pinned elgohr/ecr-login-action@main to full SHA @cfc13779e02b4569910002aacd9e24ea086264dc
-   - Added top-level `permissions: {}` to deny all by default
-   - Added job-level `permissions: contents: write` to the `release` job (needed to push tags)
-
-### Iteration 2
-
-**Fixes applied:** github-env-injection
-
-**Notes:**
-
-Fixed entrypoint.sh lines 19, 21, 22, and 23: introduced four sanitized intermediate variables (safe_username, safe_password, safe_registry, safe_docker_name) using `printf '%s' "$VAR" | tr -d '\n\r'` to strip embedded newlines before writing to $GITHUB_OUTPUT. The ::add-mask:: command was also updated to use safe_password. This prevents a malicious caller from injecting arbitrary key=value pairs into $GITHUB_OUTPUT via newline characters in AWS API responses.
+entrypoint.sh: I put back the previous fix. Each $GITHUB_OUTPUT value (username, password, registry, docker_name) now has CR/LF stripped before it is written, and the add-mask line uses the cleaned password. action.yml: I put back the previous whitespace cleanup. I also quoted the script path ("$GITHUB_ACTION_PATH/entrypoint.sh"), which was not in the earlier patch, so a path containing spaces still works. Inputs still reach the step through env:, so there is no inline expression injection. Nothing was run or tested.
 
